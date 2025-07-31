@@ -15,12 +15,17 @@ class TwoStageRetriever:
         if k is None:
             k = self.settings.MAX_ARTICLES
             
-        # Filter to get only the first chunk of each article
-        # Updated to use proper ChromaDB filter syntax
+        # Filter to get the first chunk of each KB article or any FAQ entry
+        # Matches either chunk_id == 0 or source == "faq"
         filter_dict = {
             "$and": [
                 {"project_id": {"$eq": self.project_id}},
-                {"chunk_id": {"$eq": 0}}
+                {
+                    "$or": [
+                        {"chunk_id": {"$eq": 0}},
+                        {"source": {"$eq": "faq"}}
+                    ]
+                }
             ]
         }
         
@@ -52,19 +57,25 @@ class TwoStageRetriever:
     
     def get_relevant_documents(self, query: str, *, run_manager: Optional[CallbackManagerForRetrieverRun] = None) -> List[Document]:
         """Retrieve relevant documents using two-stage approach"""
-        # Stage 1: Find relevant articles
+        # Stage 1: Find relevant articles or FAQ entries
         article_results = self._get_article_level_results(query, run_manager=run_manager)
-        
+
         if not article_results:
             return []
-        
-        # Extract article IDs from results
-        article_ids = list(set([doc.metadata["article_id"] for doc in article_results]))
-        
-        # Stage 2: Retrieve relevant sections from those articles
-        section_results = self._get_section_level_results(query, article_ids, run_manager=run_manager)
-        
-        return section_results
+
+        # Separate FAQ docs from KB article docs
+        faq_docs = [doc for doc in article_results if doc.metadata.get("source") == "faq"]
+        kb_article_ids = [doc.metadata["article_id"] for doc in article_results if doc.metadata.get("source") != "faq" and "article_id" in doc.metadata]
+
+        final_results = list(faq_docs)
+
+        # Stage 2: Retrieve relevant sections from KB articles
+        if kb_article_ids:
+            article_ids = list(set(kb_article_ids))
+            section_results = self._get_section_level_results(query, article_ids, run_manager=run_manager)
+            final_results.extend(section_results)
+
+        return final_results
     
     async def aget_relevant_documents(self, query: str, *, run_manager: Optional[CallbackManagerForRetrieverRun] = None) -> List[Document]:
         """Asynchronous version of get_relevant_documents"""
