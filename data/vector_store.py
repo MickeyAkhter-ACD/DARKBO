@@ -1,4 +1,5 @@
 import os
+import shutil
 from functools import lru_cache
 from langchain_community.vectorstores import Chroma
 from langchain_community.embeddings import HuggingFaceEmbeddings
@@ -153,11 +154,18 @@ class VectorStoreManager:
             return None
         
         # Create vector store
+        store_path = os.path.join(self.settings.VECTOR_STORE_DIR, project_id)
+        if os.path.exists(store_path):
+            try:
+                shutil.rmtree(store_path)
+            except Exception as e:
+                print(f"Warning: could not remove existing store {store_path}: {e}")
+
         try:
             vector_store = Chroma.from_documents(
                 documents=filtered_docs,
                 embedding=self.embeddings,
-                persist_directory=os.path.join(self.settings.VECTOR_STORE_DIR, project_id)
+                persist_directory=store_path
             )
             
             # Cache the vector store
