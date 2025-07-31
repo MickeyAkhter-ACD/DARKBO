@@ -288,9 +288,18 @@ Context:
                     "input": state["prompt"],
                     "chat_history": messages[1:-1]  # Exclude system message
                 })
-                
-                # Update state with answer
-                state["answer"] = response["output"]
+
+                # Format answer with project identification and sources
+                rag_chain = self.rag_chain_factory(state["project_name"])
+                formatted = rag_chain.format_response_with_sources(
+                    response["output"],
+                    context_docs,
+                    state["project_id"],
+                    state["project_name"],
+                )
+
+                # Update state with formatted answer
+                state["answer"] = formatted
                 state["messages"].append({"role": "assistant", "content": state["answer"]})
                 
             except Exception as e:
